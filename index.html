@@ -9,22 +9,22 @@
 <body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 md:p-8">
         <h1 class="text-2xl font-bold text-center mb-1 text-cyan-400">VLESS Sub to Quantumult X</h1>
-        <p class="text-slate-400 text-center text-sm mb-6">Chuyển đổi link sub V2Board / vless:// sang chuẩn cấu hình QuanX nhanh chóng.</p>
+        <p class="text-slate-400 text-center text-sm mb-6">Hỗ trợ dán trực tiếp link Sub V2Board hoặc danh sách vless://.</p>
 
         <!-- Input Section -->
         <div class="mb-4">
             <div class="flex justify-between items-center mb-2">
-                <label class="text-sm font-medium text-slate-300">1. Link Sub (Base64) hoặc danh sách vless://</label>
+                <label class="text-sm font-medium text-slate-300">1. Dán Link Sub hoặc nội dung vless://</label>
                 <button onclick="pasteFromClipboard()" class="text-xs bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-cyan-500/30 px-3 py-1.5 rounded-lg transition flex items-center gap-1 font-medium shadow-sm cursor-pointer">
                     📋 Dán link
                 </button>
             </div>
-            <textarea id="inputText" rows="5" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500 font-mono transition" placeholder="Dán nội dung vào đây..."></textarea>
+            <textarea id="inputText" rows="5" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500 font-mono transition" placeholder="Dán link sub https://... hoặc nội dung vào đây"></textarea>
         </div>
 
         <!-- Action Buttons -->
         <div class="flex gap-3 mb-6">
-            <button onclick="convertVless()" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-semibold py-3 px-4 rounded-xl transition shadow-lg shadow-cyan-900/40 text-sm flex items-center justify-center gap-2 cursor-pointer">
+            <button id="convertBtn" onclick="convertVless()" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-semibold py-3 px-4 rounded-xl transition shadow-lg shadow-cyan-900/40 text-sm flex items-center justify-center gap-2 cursor-pointer">
                 ⚡ Chuyển đổi
             </button>
             <button onclick="clearAll()" class="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-semibold py-3 px-4 rounded-xl transition text-sm cursor-pointer">
@@ -45,17 +45,15 @@
     </div>
 
     <script>
-        // Nút Dán link từ clipboard
         async function pasteFromClipboard() {
             try {
                 const text = await navigator.clipboard.readText();
                 document.getElementById('inputText').value = text;
             } catch (err) {
-                alert('Trình duyệt chặn quyền đọc bộ nhớ tạm. Hãy dùng phím tắt Ctrl+V (hoặc Cmd+V) để dán.');
+                alert('Trình duyệt chặn quyền đọc bộ nhớ tạm. Hãy giữ và chọn Dán thủ công.');
             }
         }
 
-        // Nút Sao chép kết quả
         async function copyToClipboard() {
             const outputText = document.getElementById('outputText').value;
             if (!outputText) {
@@ -70,13 +68,11 @@
             }
         }
 
-        // Nút Xóa sạch
         function clearAll() {
             document.getElementById('inputText').value = '';
             document.getElementById('outputText').value = '';
         }
 
-        // Giải mã Base64 hỗ trợ ký tự Unicode
         function decodeBase64Unicode(str) {
             try {
                 const binString = atob(str.trim());
@@ -87,86 +83,114 @@
             }
         }
 
-        // Xử lý logic chuyển đổi VLESS
-        function convertVless() {
+        async function convertVless() {
             let input = document.getElementById('inputText').value.trim();
             if (!input) {
                 alert('Vui lòng nhập hoặc dán dữ liệu cần chuyển đổi!');
                 return;
             }
 
-            let rawData = input;
-            if (!input.startsWith('vless://') && !input.includes('\n')) {
-                try {
-                    let decoded = decodeBase64Unicode(input);
-                    if (decoded) rawData = decoded;
-                } catch (err) {
-                    console.log('Giữ nguyên dạng thô do không phải base64 chuẩn.');
-                }
-            }
+            let btn = document.getElementById('convertBtn');
+            btn.innerText = '⏳ Đang xử lý...';
+            btn.disabled = true;
 
-            let lines = rawData.split(/\r?\n/);
-            let quanxLines = [];
+            try {
+                let rawData = input;
 
-            lines.forEach(line => {
-                line = line.trim();
-                if (!line.startsWith('vless://')) return;
-
-                try {
-                    let urlObj = new URL(line);
-                    let uuid = urlObj.username;
-                    let host = urlObj.hostname;
-                    let port = urlObj.port || '443';
-                    let tag = decodeURIComponent(urlObj.hash.substring(1)) || 'VLESS-Node';
-                    
-                    let params = urlObj.searchParams;
-                    let type = params.get('type') || 'tcp';
-                    let security = params.get('security') || 'none';
-                    let sni = params.get('sni') || params.get('host') || host;
-                    let flow = params.get('flow') || '';
-                    let path = params.get('path') || '/';
-                    let pbk = params.get('pbk') || '';
-                    let sid = params.get('sid') || '';
-
-                    let qxParts = [`vless=${host}:${port}`, `method=none`, `password=${uuid}`];
-
-                    if (flow) {
-                        qxParts.push(`vless-flow=${flow}`);
+                // Nếu người dùng dán đường dẫn URL (http:// hoặc https://)
+                if (input.startsWith('http://') || input.startsWith('https://')) {
+                    try {
+                        // Sử dụng dịch vụ CORS công khai để tải nội dung link sub
+                        let proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(input)}`;
+                        let response = await fetch(proxyUrl);
+                        if (!response.ok) throw new Error('Network response was not ok');
+                        rawData = await response.text();
+                    } catch (err) {
+                        alert('Không thể tải tự động từ link sub này do bị chặn. Vui lòng mở link sub trên trình duyệt, copy toàn bộ chữ mã hóa dán vào đây.');
+                        btn.innerText = '⚡ Chuyển đổi';
+                        btn.disabled = false;
+                        return;
                     }
+                }
 
-                    if (security === 'tls') {
-                        if (type === 'ws') {
-                            qxParts.push(`obfs=wss`);
-                            qxParts.push(`obfs-uri=${path}`);
-                            qxParts.push(`tls-host=${sni}`);
-                        } else {
+                // Giải mã Base64 nếu không bắt đầu bằng vless://
+                if (!rawData.startsWith('vless://') && !rawData.includes('\n')) {
+                    try {
+                        let decoded = decodeBase64Unicode(rawData);
+                        if (decoded) rawData = decoded;
+                    } catch (err) {
+                        console.log('Không phải base64 chuẩn, giữ nguyên.');
+                    }
+                }
+
+                let lines = rawData.split(/\r?\n/);
+                let quanxLines = [];
+
+                lines.forEach(line => {
+                    line = line.trim();
+                    if (!line.startsWith('vless://')) return;
+
+                    try {
+                        let urlObj = new URL(line);
+                        let uuid = urlObj.username;
+                        let host = urlObj.hostname;
+                        let port = urlObj.port || '443';
+                        let tag = decodeURIComponent(urlObj.hash.substring(1)) || 'VLESS-Node';
+                        
+                        let params = urlObj.searchParams;
+                        let type = params.get('type') || 'tcp';
+                        let security = params.get('security') || 'none';
+                        let sni = params.get('sni') || params.get('host') || host;
+                        let flow = params.get('flow') || '';
+                        let path = params.get('path') || '/';
+                        let pbk = params.get('pbk') || '';
+                        let sid = params.get('sid') || '';
+
+                        let qxParts = [`vless=${host}:${port}`, `method=none`, `password=${uuid}`];
+
+                        if (flow) {
+                            qxParts.push(`vless-flow=${flow}`);
+                        }
+
+                        if (security === 'tls') {
+                            if (type === 'ws') {
+                                qxParts.push(`obfs=wss`);
+                                qxParts.push(`obfs-uri=${path}`);
+                                qxParts.push(`tls-host=${sni}`);
+                            } else {
+                                qxParts.push(`obfs=over-tls`);
+                                qxParts.push(`tls-host=${sni}`);
+                            }
+                            qxParts.push(`tls-verification=true`);
+                        } else if (security === 'reality') {
                             qxParts.push(`obfs=over-tls`);
                             qxParts.push(`tls-host=${sni}`);
+                            if (pbk) qxParts.push(`reality-public-key=${pbk}`);
+                            if (sid) qxParts.push(`reality-short-id=${sid}`);
+                            qxParts.push(`tls-verification=true`);
+                        } else {
+                            if (type === 'ws') {
+                                qxParts.push(`obfs=ws`);
+                                qxParts.push(`obfs-uri=${path}`);
+                            }
                         }
-                        qxParts.push(`tls-verification=true`);
-                    } else if (security === 'reality') {
-                        qxParts.push(`obfs=over-tls`);
-                        qxParts.push(`tls-host=${sni}`);
-                        if (pbk) qxParts.push(`reality-public-key=${pbk}`);
-                        if (sid) qxParts.push(`reality-short-id=${sid}`);
-                        qxParts.push(`tls-verification=true`);
-                    } else {
-                        if (type === 'ws') {
-                            qxParts.push(`obfs=ws`);
-                            qxParts.push(`obfs-uri=${path}`);
-                        }
+
+                        qxParts.push(`udp-relay=true`);
+                        qxParts.push(`tag=${tag}`);
+
+                        quanxLines.push(qxParts.join(', '));
+                    } catch (err) {
+                        console.error('Lỗi phân tích line:', line, err);
                     }
+                });
 
-                    qxParts.push(`udp-relay=true`);
-                    qxParts.push(`tag=${tag}`);
-
-                    quanxLines.push(qxParts.join(', '));
-                } catch (err) {
-                    console.error('Lỗi phân tích line:', line, err);
-                }
-            });
-
-            document.getElementById('outputText').value = quanxLines.join('\n');
+                document.getElementById('outputText').value = quanxLines.join('\n');
+            } catch (e) {
+                alert('Có lỗi xảy ra trong quá trình xử lý!');
+            } finally {
+                btn.innerText = '⚡ Chuyển đổi';
+                btn.disabled = false;
+            }
         }
     </script>
 </body>
