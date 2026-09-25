@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VLESS to Quantumult X Converter</title>
-    <script src="https://tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 md:p-8">
         <h1 class="text-2xl font-bold text-center mb-1 text-cyan-400">VLESS Sub to Quantumult X</h1>
-        <p class="text-slate-400 text-center text-sm mb-6">Tự động thêm chuẩn [Proxy] cho file Snippet QuanX.</p>
+        <p class="text-slate-400 text-center text-sm mb-6">Xuất danh sách node thuần túy tương thích tuyệt đối với QuanX.</p>
 
         <!-- Input Section -->
         <div class="mb-4">
@@ -181,9 +181,9 @@
                     }
                 });
 
-                // Bắt buộc phải có [Proxy] ở đầu file snippet của QuanX
+                // Chỉ xuất ra danh sách các dòng vless thuần túy, KHÔNG có [Proxy]
                 if (quanxLines.length > 0) {
-                    document.getElementById('outputText').value = "[Proxy]\n" + quanxLines.join('\n');
+                    document.getElementById('outputText').value = quanxLines.join('\n');
                 } else {
                     document.getElementById('outputText').value = "Không tìm thấy node vless hợp lệ nào!";
                 }
