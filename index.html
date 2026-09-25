@@ -4,12 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VLESS to Quantumult X Converter</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://tailwindcss.com"></script>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 md:p-8">
         <h1 class="text-2xl font-bold text-center mb-1 text-cyan-400">VLESS Sub to Quantumult X</h1>
-        <p class="text-slate-400 text-center text-sm mb-6">Hỗ trợ dán trực tiếp link Sub V2Board hoặc danh sách vless://.</p>
+        <p class="text-slate-400 text-center text-sm mb-6">Tự động thêm chuẩn [Proxy] cho file Snippet QuanX.</p>
 
         <!-- Input Section -->
         <div class="mb-4">
@@ -97,29 +97,26 @@
             try {
                 let rawData = input;
 
-                // Nếu người dùng dán đường dẫn URL (http:// hoặc https://)
                 if (input.startsWith('http://') || input.startsWith('https://')) {
                     try {
-                        // Sử dụng dịch vụ CORS công khai để tải nội dung link sub
                         let proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(input)}`;
                         let response = await fetch(proxyUrl);
                         if (!response.ok) throw new Error('Network response was not ok');
                         rawData = await response.text();
                     } catch (err) {
-                        alert('Không thể tải tự động từ link sub này do bị chặn. Vui lòng mở link sub trên trình duyệt, copy toàn bộ chữ mã hóa dán vào đây.');
+                        alert('Không thể tải tự động từ link sub này. Hãy mở link trên trình duyệt, copy nội dung base64 dán vào đây.');
                         btn.innerText = '⚡ Chuyển đổi';
                         btn.disabled = false;
                         return;
                     }
                 }
 
-                // Giải mã Base64 nếu không bắt đầu bằng vless://
                 if (!rawData.startsWith('vless://') && !rawData.includes('\n')) {
                     try {
                         let decoded = decodeBase64Unicode(rawData);
                         if (decoded) rawData = decoded;
                     } catch (err) {
-                        console.log('Không phải base64 chuẩn, giữ nguyên.');
+                        console.log('Giữ nguyên dạng thô.');
                     }
                 }
 
@@ -184,7 +181,13 @@
                     }
                 });
 
-                document.getElementById('outputText').value = quanxLines.join('\n');
+                // Bắt buộc phải có [Proxy] ở đầu file snippet của QuanX
+                if (quanxLines.length > 0) {
+                    document.getElementById('outputText').value = "[Proxy]\n" + quanxLines.join('\n');
+                } else {
+                    document.getElementById('outputText').value = "Không tìm thấy node vless hợp lệ nào!";
+                }
+
             } catch (e) {
                 alert('Có lỗi xảy ra trong quá trình xử lý!');
             } finally {
