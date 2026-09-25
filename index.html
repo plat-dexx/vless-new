@@ -9,17 +9,17 @@
 <body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 md:p-8">
         <h1 class="text-2xl font-bold text-center mb-1 text-cyan-400">VLESS Sub to Quantumult X</h1>
-        <p class="text-slate-400 text-center text-sm mb-6">Tối ưu hóa đặc biệt cho định dạng Base64 V2Board.</p>
+        <p class="text-slate-400 text-center text-sm mb-6">Trình chuyển đổi tối ưu hóa giữ nguyên port chính xác cho V2Board.</p>
 
         <!-- Input Section -->
         <div class="mb-4">
             <div class="flex justify-between items-center mb-2">
-                <label class="text-sm font-medium text-slate-300">1. Dán Link Sub hoặc nội dung vless://</label>
+                <label class="text-sm font-medium text-slate-300">1. Dán chuỗi Base64 Sub hoặc nội dung vless://</label>
                 <button onclick="pasteFromClipboard()" class="text-xs bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-cyan-500/30 px-3 py-1.5 rounded-lg transition flex items-center gap-1 font-medium shadow-sm cursor-pointer">
                     📋 Dán link
                 </button>
             </div>
-            <textarea id="inputText" rows="5" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500 font-mono transition" placeholder="Dán link sub https://... hoặc nội dung vào đây"></textarea>
+            <textarea id="inputText" rows="5" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-slate-200 focus:outline-none focus:border-cyan-500 font-mono transition" placeholder="Dán nội dung vào đây..."></textarea>
         </div>
 
         <!-- Action Buttons -->
@@ -75,17 +75,22 @@
 
         function decodeBase64Unicode(str) {
             try {
-                let cleaned = str.trim().replace(/-/g, '+').replace(/_/g, '/');
+                let cleaned = str.trim().replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
                 while (cleaned.length % 4) cleaned += '=';
                 const binString = atob(cleaned);
                 const bytes = Uint8Array.from(binString, (m) => m.codePointAt(0));
                 return new TextDecoder().decode(bytes);
             } catch (e) {
-                try { return atob(str.trim()); } catch (err) { return str; }
+                try {
+                    let cleaned = str.trim().replace(/\s+/g, '');
+                    return atob(cleaned);
+                } catch (err) {
+                    return null;
+                }
             }
         }
 
-        async function convertVless() {
+        function convertVless() {
             let input = document.getElementById('inputText').value.trim();
             if (!input) {
                 alert('Vui lòng nhập hoặc dán dữ liệu cần chuyển đổi!');
@@ -99,23 +104,11 @@
             try {
                 let rawData = input;
 
-                if (input.startsWith('http://') || input.startsWith('https://')) {
-                    try {
-                        let proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(input)}`;
-                        let response = await fetch(proxyUrl);
-                        if (!response.ok) throw new Error('Network response was not ok');
-                        rawData = await response.text();
-                    } catch (err) {
-                        alert('Không thể tải tự động từ link sub này. Hãy mở link trên trình duyệt, copy nội dung base64 dán vào đây.');
-                        btn.innerText = '⚡ Chuyển đổi';
-                        btn.disabled = false;
-                        return;
-                    }
-                }
-
-                if (!rawData.startsWith('vless://') && !rawData.includes('\n')) {
+                if (!rawData.startsWith('vless://')) {
                     let decoded = decodeBase64Unicode(rawData);
-                    if (decoded) rawData = decoded;
+                    if (decoded) {
+                        rawData = decoded;
+                    }
                 }
 
                 let lines = rawData.split(/\r?\n/);
@@ -128,10 +121,28 @@
                     try {
                         let content = line.substring(8);
                         let queryIndex = content.indexOf('?');
-                        let core = queryIndex !== -1 ? content.substring(0, queryIndex) : content;
-                        let searchPart = queryIndex !== -1 ? content.substring(queryIndex) : '';
+                        let hashIndex = content.indexOf('#');
+                        
+                        let core = content;
+                        let queryString = '';
+                        let hashString = '';
+                        
+                        if (queryIndex !== -1) {
+                            core = content.substring(0, queryIndex);
+                            let rest = content.substring(queryIndex + 1);
+                            if (rest.includes('#')) {
+                                let parts = rest.split('#');
+                                queryString = parts[0];
+                                hashString = parts[1];
+                            } else {
+                                queryString = rest;
+                            }
+                        } else if (hashIndex !== -1) {
+                            core = content.substring(0, hashIndex);
+                            hashString = content.substring(hashIndex + 1);
+                        }
 
-                        // Giải mã đoạn Base64 cốt lõi của V2Board nếu không chứa dấu @
+                        // Giải mã base64 phần core nếu là định dạng V2Board ẩn
                         if (!core.includes('@')) {
                             let decodedCore = decodeBase64Unicode(core);
                             if (decodedCore && decodedCore.includes('@')) {
@@ -139,52 +150,64 @@
                             }
                         }
 
-                        let standardUrl = 'http://' + core + searchPart;
-                        let urlObj = new URL(standardUrl);
-                        
-                        let userinfo = urlObj.username;
+                        let atIndex = core.lastIndexOf('@');
+                        if (atIndex === -1) return;
+
+                        let userinfo = core.substring(0, atIndex);
+                        let hostport = core.substring(atIndex + 1);
+
+                        // Giải mã userinfo nếu bị mã hóa base64 con bên trong
                         let decodedUserInfo = decodeBase64Unicode(userinfo);
+                        if (decodedUserInfo && decodedUserInfo.includes(':')) {
+                            userinfo = decodedUserInfo;
+                        }
 
                         let method = 'none';
                         let uuid = userinfo;
-                        if (decodedUserInfo && decodedUserInfo.includes(':')) {
-                            let parts = decodedUserInfo.split(':');
-                            method = parts[0] || 'none';
-                            uuid = parts[1] || parts[0];
-                        } else if (userinfo.includes(':')) {
+                        if (userinfo.includes(':')) {
                             let parts = userinfo.split(':');
                             method = parts[0] || 'none';
-                            uuid = parts[1] || parts[0];
+                            uuid = parts.slice(1).join(':');
                         }
 
-                        let host = urlObj.hostname;
-                        let port = urlObj.port || '443';
-                        
-                        let params = urlObj.searchParams;
-                        let rawTag = params.get('remarks') || urlObj.hash.substring(1) || 'VLESS-Node';
-                        let tag = decodeURIComponent(rawTag);
+                        // Bóc tách chính xác host và port (hỗ trợ cả port tùy chỉnh như 80, 8443...)
+                        let host = hostport;
+                        let port = '443';
+                        let lastColon = hostport.lastIndexOf(':');
+                        let closingBracket = hostport.lastIndexOf(']');
+                        if (lastColon !== -1 && lastColon > closingBracket) {
+                            host = hostport.substring(0, lastColon);
+                            port = hostport.substring(lastColon + 1);
+                        }
+
+                        let params = new URLSearchParams(queryString);
+                        let rawRemarks = params.get('remarks') || hashString || 'VLESS-Node';
+                        let tag = rawRemarks;
+                        try { tag = decodeURIComponent(rawRemarks); } catch(e) {}
+
                         let obfs = params.get('obfs') || params.get('type') || 'tcp';
-                        let obfsParam = params.get('obfsParam') || '';
-                        let path = params.get('path') || '/';
-                        let udp = params.get('udp');
+                        let obfsParam = params.get('obfsParam') || params.get('host') || '';
+                        let path = params.get('path') || '';
+                        let udp = params.get('udp') || params.get('xudp');
+                        let security = params.get('security') || '';
+                        let sni = params.get('sni') || '';
 
                         let qxParts = [`vless=${host}:${port}`, `method=${method}`, `password=${uuid}`];
 
                         if (obfs === 'websocket' || obfs === 'ws') {
                             qxParts.push(`obfs=ws`);
                             if (obfsParam) qxParts.push(`obfs-host=${obfsParam}`);
-                            if (path && path !== '/') qxParts.push(`obfs-uri=${path}`);
-                        } else if (obfs === 'tls' || params.get('security') === 'tls') {
+                            if (path) qxParts.push(`obfs-uri=${path}`);
+                        } else if (security === 'tls' || obfs === 'tls') {
                             qxParts.push(`obfs=over-tls`);
-                            let sni = params.get('sni') || params.get('host') || host;
-                            qxParts.push(`tls-host=${sni}`);
+                            qxParts.push(`tls-host=${sni || obfsParam || host}`);
                             qxParts.push(`tls-verification=true`);
                         } else {
                             if (obfsParam) qxParts.push(`obfs-host=${obfsParam}`);
-                            if (path && path !== '/') qxParts.push(`obfs-uri=${path}`);
+                            if (path) qxParts.push(`obfs-uri=${path}`);
                         }
 
-                        if (udp === '1' || udp === 'true') {
+                        if (udp === '1' || udp === 'true' || udp === 'xudp') {
                             qxParts.push(`udp-relay=true`);
                         }
                         qxParts.push(`tag=${tag}`);
