@@ -9,7 +9,7 @@
 <body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 md:p-8">
         <h1 class="text-2xl font-bold text-center mb-1 text-cyan-400">VLESS Sub to Quantumult X</h1>
-        <p class="text-slate-400 text-center text-sm mb-6">Xuất danh sách node thuần túy tương thích tuyệt đối với QuanX.</p>
+        <p class="text-slate-400 text-center text-sm mb-6">Hỗ trợ trích xuất chuẩn xác obfs-host, obfs-uri và udp-relay cho QuanX.</p>
 
         <!-- Input Section -->
         <div class="mb-4">
@@ -129,50 +129,54 @@
 
                     try {
                         let urlObj = new URL(line);
-                        let uuid = urlObj.username;
+                        let userinfo = urlObj.username;
+                        
+                        // Xử lý giải mã base64 của userinfo (ví dụ: none:uuid được mã hóa base64)
+                        let decodedUserInfo = userinfo;
+                        try {
+                            let decoded = atob(userinfo);
+                            if (decoded.includes(':')) {
+                                decodedUserInfo = decoded;
+                            }
+                        } catch (e) {}
+
+                        let method = 'none';
+                        let uuid = userinfo;
+                        if (decodedUserInfo.includes(':')) {
+                            let parts = decodedUserInfo.split(':');
+                            method = parts[0] || 'none';
+                            uuid = parts[1] || parts[0];
+                        }
+
                         let host = urlObj.hostname;
                         let port = urlObj.port || '443';
-                        let tag = decodeURIComponent(urlObj.hash.substring(1)) || 'VLESS-Node';
                         
                         let params = urlObj.searchParams;
-                        let type = params.get('type') || 'tcp';
-                        let security = params.get('security') || 'none';
-                        let sni = params.get('sni') || params.get('host') || host;
-                        let flow = params.get('flow') || '';
+                        let tag = decodeURIComponent(params.get('remarks') || urlObj.hash.substring(1) || 'VLESS-Node');
+                        let obfs = params.get('obfs') || params.get('type') || 'tcp';
+                        let obfsParam = params.get('obfsParam') || '';
                         let path = params.get('path') || '/';
-                        let pbk = params.get('pbk') || '';
-                        let sid = params.get('sid') || '';
+                        let udp = params.get('udp');
 
-                        let qxParts = [`vless=${host}:${port}`, `method=none`, `password=${uuid}`];
+                        let qxParts = [`vless=${host}:${port}`, `method=${method}`, `password=${uuid}`];
 
-                        if (flow) {
-                            qxParts.push(`vless-flow=${flow}`);
-                        }
-
-                        if (security === 'tls') {
-                            if (type === 'ws') {
-                                qxParts.push(`obfs=wss`);
-                                qxParts.push(`obfs-uri=${path}`);
-                                qxParts.push(`tls-host=${sni}`);
-                            } else {
-                                qxParts.push(`obfs=over-tls`);
-                                qxParts.push(`tls-host=${sni}`);
-                            }
-                            qxParts.push(`tls-verification=true`);
-                        } else if (security === 'reality') {
+                        if (obfs === 'websocket' || obfs === 'ws') {
+                            qxParts.push(`obfs=ws`);
+                            if (obfsParam) qxParts.push(`obfs-host=${obfsParam}`);
+                            if (path) qxParts.push(`obfs-uri=${path}`);
+                        } else if (obfs === 'tls' || params.get('security') === 'tls') {
                             qxParts.push(`obfs=over-tls`);
+                            let sni = params.get('sni') || params.get('host') || host;
                             qxParts.push(`tls-host=${sni}`);
-                            if (pbk) qxParts.push(`reality-public-key=${pbk}`);
-                            if (sid) qxParts.push(`reality-short-id=${sid}`);
                             qxParts.push(`tls-verification=true`);
                         } else {
-                            if (type === 'ws') {
-                                qxParts.push(`obfs=ws`);
-                                qxParts.push(`obfs-uri=${path}`);
-                            }
+                            if (obfsParam) qxParts.push(`obfs-host=${obfsParam}`);
+                            if (path) qxParts.push(`obfs-uri=${path}`);
                         }
 
-                        qxParts.push(`udp-relay=true`);
+                        if (udp === '1' || udp === 'true') {
+                            qxParts.push(`udp-relay=true`);
+                        }
                         qxParts.push(`tag=${tag}`);
 
                         quanxLines.push(qxParts.join(', '));
@@ -181,7 +185,6 @@
                     }
                 });
 
-                // Chỉ xuất ra danh sách các dòng vless thuần túy, KHÔNG có [Proxy]
                 if (quanxLines.length > 0) {
                     document.getElementById('outputText').value = quanxLines.join('\n');
                 } else {
