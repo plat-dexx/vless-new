@@ -9,7 +9,7 @@
 <body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-6 md:p-8">
         <h1 class="text-2xl font-bold text-center mb-1 text-cyan-400">VLESS Sub to Quantumult X</h1>
-        <p class="text-slate-400 text-center text-sm mb-6">Trình chuyển đổi tối ưu hóa riêng cho V2Board & QuanX.</p>
+        <p class="text-slate-400 text-center text-sm mb-6">Tối ưu hóa đặc biệt cho định dạng Base64 V2Board.</p>
 
         <!-- Input Section -->
         <div class="mb-4">
@@ -126,8 +126,20 @@
                     if (!line.startsWith('vless://')) return;
 
                     try {
-                        // Khắc phục lỗi trình duyệt không đọc được giao thức tùy chỉnh vless://
-                        let standardUrl = line.replace(/^vless:\/\//i, 'http://');
+                        let content = line.substring(8);
+                        let queryIndex = content.indexOf('?');
+                        let core = queryIndex !== -1 ? content.substring(0, queryIndex) : content;
+                        let searchPart = queryIndex !== -1 ? content.substring(queryIndex) : '';
+
+                        // Giải mã đoạn Base64 cốt lõi của V2Board nếu không chứa dấu @
+                        if (!core.includes('@')) {
+                            let decodedCore = decodeBase64Unicode(core);
+                            if (decodedCore && decodedCore.includes('@')) {
+                                core = decodedCore;
+                            }
+                        }
+
+                        let standardUrl = 'http://' + core + searchPart;
                         let urlObj = new URL(standardUrl);
                         
                         let userinfo = urlObj.username;
